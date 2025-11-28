@@ -1,22 +1,24 @@
 from flask import Flask, jsonify, url_for, request
+from .storage_connection import *
 import json
 import pandas as pd
+import logging
 
 app = Flask(__name__)
+# Basic configuration for console output
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# You can also add file handlers for persistent logs
+file_handler = logging.FileHandler('sm_analysis_app.log')
+file_handler.setLevel(logging.WARNING)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+app.logger.addHandler(file_handler)
+
+mdo = MongodbOperations("social_media_analysis")
 
 sm_data = pd.read_csv('data/smmh.csv')
-
-@app.route("/about-me", methods=["GET"])
-def about_me():
-    about_me_data = {"name": "rohini", "skills": ["python", "sql"]}
-    return jsonify(about_me_data), 200
-
-@app.route("/sm-user-survey", methods=["GET"])
-def user_survey_response():
-    sm_cols = get_survey_data()
-    print(sm_cols)
-    data = {'cols': sm_cols}
-    return jsonify(data) , 200
 
 
 @app.route("/sm-platform-info", methods=["GET"])
@@ -51,33 +53,53 @@ def get_sm_filtered_data():
     except Exception as e:
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
-@app.route('/sm-/<int:user_id>', methods=['PUT'])
-def update_user(user_id):
-    """Updates an existing user."""
-    update_data = request.get_json()
-    if not update_data:
-        return jsonify({"error": "No data provided for update"}), 400
+@app.route('/add-sm-data', methods=['POST'])
+def add_item():
+    try:
+        data = request.json # Assuming data is sent as JSON
+        collection = "raw_data"
+        mdo.insert_one(collection,data) # Using PyMongo directly
+        return jsonify({"message": "Item added successfully"}), 200
+    except Exception as e:
+        print(f"Error adding data to mongo collection", str(e))
 
-    for user in users:
-        if user['id'] == user_id:
-            if 'name' in update_data:
-                user['name'] = update_data['name']
-            if 'email' in update_data:
-                user['email'] = update_data['email']
-            return jsonify(user)
-    return jsonify({"error": "User not found"}), 404
+@app.route('/get-sm-user/<int:user_id>', methods=['GET'])
+def get_sm_user(user_id):
+    try:
+        collection = "raw_data"
+        sm_user_data = mdo.find(collection,{'user_id': user_id}) # Using PyMongo directly
+        if sm_user_data:
+            for doc in sm_user_data:
+                del doc['_id']
+                return jsonify(doc)
+        else:
+            return f"User id: {user_id} document not found !"
+    except Exception as e:
+        print(f"Error retrieving sm user data", str(e))
+        return jsonify({'error': 'Error retrieving sm user data'}), 400
 
-@app.route('/sm-filter/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    """Deletes a user."""
-    global users
-    initial_length = len(users)
-    users = [user for user in users if user['id'] != user_id]
-    if len(users) < initial_length:
-        return jsonify({"message": f"User {user_id} deleted"}), 200
-    return jsonify({"error": "User not found"}), 404
 
-# user_profile_url = url_for('show_user_profile', username='rohini')
+@app.route('/update-sm-data/<user_id>', methods=['PUT'])
+def update_item(user_id):
+    try:
+        collection = "raw_data"
+        data = json.dumps(request.json)
+        mdo.update_one(collection, {"user_id": user_id}, {"$set": data})
+        return jsonify({"message": "updated the data successfully"}), 200
+    except Exception as e:
+        print("Error putting the data to mongo document", str(e))
+        return jsonify({"error": "Error putting the data to mongo document"}), 400
+
+@app.route('/delete-sm-user/<user_id>', methods=['DELETE'])
+def delete_item(user_id):
+    try:
+        collection = "raw_data"
+        deleted_doc = mdo.delete_one(collection, {"user_id": user_id})
+        print("="*1000)
+        print(f"{deleted_doc.deleted_count} document(s) deleted.")
+        return jsonify({"message": "Item deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Error deleting the document for user id: {user_id}"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)

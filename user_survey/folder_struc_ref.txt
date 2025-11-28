@@ -1,0 +1,15 @@
+my_flask_app/
+│
+├── app/
+│   ├── __init__.py
+│   ├── routes.py
+│   ├── static/
+│   └── templates/
+│
+├── tests/
+│
+├── config.py
+└── run.py
+
+
+mkdir -p my_flask_app/{app/{static,templates},tests} && touch my_flask_app/{app/__init__.py,app/routes.py,config.py,run.py}
