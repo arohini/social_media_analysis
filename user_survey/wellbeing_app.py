@@ -1,8 +1,15 @@
+import sys
+import os
+from bson.objectid import ObjectId
+
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
 from flask import Flask, jsonify, url_for, request
 from .storage_connection import *
 import json
 import pandas as pd
 import logging
+
 
 app = Flask(__name__)
 # Basic configuration for console output
@@ -17,7 +24,7 @@ file_handler.setFormatter(formatter)
 app.logger.addHandler(file_handler)
 
 mdo = MongodbOperations("social_media_analysis")
-
+print(sys.path)
 sm_data = pd.read_csv('data/smmh.csv')
 
 
@@ -79,22 +86,27 @@ def get_sm_user(user_id):
         return jsonify({'error': 'Error retrieving sm user data'}), 400
 
 
-@app.route('/update-sm-data/<user_id>', methods=['PUT'])
+@app.route('/update-sm-data/<int:user_id>', methods=['PUT'])
 def update_item(user_id):
     try:
         collection = "raw_data"
-        data = json.dumps(request.json)
-        mdo.update_one(collection, {"user_id": user_id}, {"$set": data})
+        data = request.json
+        try:
+            # mdo.update_one(collection, {"_id": ObjectId(id)}, {"$set": data})
+            mdo.update_one(collection, {"user_id": user_id}, {"$set": data})
+        except Exception as e:
+            print("Error in updating", str(e))
         return jsonify({"message": "updated the data successfully"}), 200
     except Exception as e:
         print("Error putting the data to mongo document", str(e))
         return jsonify({"error": "Error putting the data to mongo document"}), 400
 
-@app.route('/delete-sm-user/<user_id>', methods=['DELETE'])
+@app.route('/delete-sm-user/<int:user_id>', methods=['DELETE'])
 def delete_item(user_id):
     try:
         collection = "raw_data"
-        deleted_doc = mdo.delete_one(collection, {"user_id": user_id})
+        print( {"user_id": user_id})
+        deleted_doc = mdo.delete_one(collection, {"user_id": int(user_id)})
         print("="*1000)
         print(f"{deleted_doc.deleted_count} document(s) deleted.")
         return jsonify({"message": "Item deleted successfully"}), 200
